@@ -60,6 +60,34 @@ fn main() {
 
         println!();
 
+        let full_start = tokio::time::Instant::now();
+        let mut v = vec![0; 10];
+        futures::stream::iter([0, 1, 2, 3, 4, 5].into_iter())
+            .map(|n| {
+                let now = tokio::time::Instant::now();
+                (now, n, n * 2)
+            })
+            .map(|(start, n, n2)| async move {
+                let elapsed = start.elapsed();
+
+                // elapsed should all be small!
+                println!("{n}: {elapsed:?}");
+
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
+                n2
+            })
+            .zip(futures::stream::iter(&mut v))
+            .for_each_concurrent(None, |(n2, slot)| async move {
+                *slot = n2.await;
+            })
+            .await;
+        let full_elapsed = full_start.elapsed();
+        println!("for_each_concurrent: {v:?}");
+        println!("for_each_concurrent: {full_elapsed:?}");
+
+        println!();
+
         // fn_graph
 
         let mut resources = Resources::new();
