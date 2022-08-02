@@ -88,6 +88,74 @@ fn main() {
 
         println!();
 
+        // NOTE:
+        //
+        // `bruh![moment]`:
+        //
+        // > btw interestingly it depends on the order in which the subtasks are ready due to the implementation
+        // > details of `FuturesOrdered`, you're kinda breaking it by sleeping in fold:
+        //
+        // https://play.rust-lang.org/?version=stable&mode=debug&edition=2021&gist=21944c56fe9e89b57272d85d576dddd7
+
+        println!("Warning: sleeping less than previous thread means a later task\n\
+                  still waits for the previous tasks to finish");
+        println!("---");
+        println!("sleep less than previous thread, buffered fold:");
+        let full_start = tokio::time::Instant::now();
+        let _v = futures::stream::iter([0, 1, 2, 3, 4, 5].into_iter())
+            .map(|n| {
+                let now = tokio::time::Instant::now();
+                (now, n, n * 2)
+            })
+            .map(|(start, n, n2)| async move {
+                let elapsed = start.elapsed();
+
+                // elapsed should all be small!
+                println!("{n}: {elapsed:?}");
+
+                tokio::time::sleep(tokio::time::Duration::from_millis(20 - n)).await;
+                n2
+            })
+            .buffered(100)
+            .fold(Vec::new(), |mut v, n2| async move {
+                v.push(n2);
+                tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+                v
+            })
+            .await;
+
+        let full_elapsed = full_start.elapsed();
+        println!("buffered fold: {full_elapsed:?}");
+        println!();
+
+        println!("sleep less than previous thread, buffer_unordered fold:");
+        let full_start = tokio::time::Instant::now();
+        let _v = futures::stream::iter([0, 1, 2, 3, 4, 5].into_iter())
+            .map(|n| {
+                let now = tokio::time::Instant::now();
+                (now, n, n * 2)
+            })
+            .map(|(start, n, n2)| async move {
+                let elapsed = start.elapsed();
+
+                // elapsed should all be small!
+                println!("{n}: {elapsed:?}");
+
+                tokio::time::sleep(tokio::time::Duration::from_millis(20 - n)).await;
+                n2
+            })
+            .buffer_unordered(100)
+            .fold(Vec::new(), |mut v, n2| async move {
+                v.push(n2);
+                tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+                v
+            })
+            .await;
+
+        let full_elapsed = full_start.elapsed();
+        println!("buffer_unordered fold: {full_elapsed:?}");
+        println!();
+
         // fn_graph
 
         let mut resources = Resources::new();
